@@ -3,14 +3,14 @@
   "name": "pretty-typescript-errors",
   "displayName": "Pretty TypeScript Errors - AliImranDev",
   "description": "Makes complicated TypeScript errors easier to understand.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "AliImranDev",
   "icon": "resources/icon.png",
   "license": "MIT",
   "repository": {
-  "type": "git",
-  "url": "https://github.com/AliImran-coder/pretty-typescript-errors.git"
-},
+    "type": "git",
+    "url": "https://github.com/AliImran-coder/pretty-typescript-errors.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -21,36 +21,38 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  
-
-"contributes": {
+  "contributes": {
     "commands": [
-        {
-            "command": "prettyErrors.openPanel",
-            "title": "Pretty TypeScript Errors: Open Panel"
-        }
+      {
+        "command": "prettyErrors.openPanel",
+        "title": "Open Pretty TypeScript Errors"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "prettyErrors.openPanel",
+        "key": "ctrl+alt+1"
+      }
     ],
     "viewsContainers": {
-        "activitybar": [
-            {
-                "id": "prettyErrors",
-                "title": "Pretty Errors",
-                "icon": "resources/icon.svg"
-            }
-        ]
+      "activitybar": [
+        {
+          "id": "prettyErrors",
+          "title": "Pretty Errors",
+          "icon": "resources/icon.svg"
+        }
+      ]
     },
     "views": {
-        "prettyErrors": [
-            {
-                "id": "prettyErrors.sidebar",
-                "name": "TypeScript Problems",
-                "type": "webview"
-            }
-        ]
+      "prettyErrors": [
+        {
+          "id": "prettyErrors.sidebar",
+          "name": "TypeScript Problems",
+          "type": "webview"
+        }
+      ]
     }
-},
-
-
+  },
   "scripts": {
     "check": "node --check src/extension.js"
   },

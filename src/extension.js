@@ -3,15 +3,11 @@ const vscode = require("vscode");
 
 // Explain TypeScript errors in simple English
 function explainError(message) {
-    if (
-        message.includes("Type 'number' is not assignable to type 'string'")
-    ) {
+    if (message.includes("Type 'number' is not assignable to type 'string'")) {
         return "You assigned a number to a variable that only accepts text.";
     }
 
-    if (
-        message.includes("Argument of type 'string' is not assignable to parameter of type 'number'")
-    ) {
+    if (message.includes("Argument of type 'string' is not assignable to parameter of type 'number'")) {
         return "This function expects a number, but you provided text.";
     }
 
@@ -22,37 +18,44 @@ function explainError(message) {
     return "TypeScript found a problem in your code. Check the original message for details.";
 }
 
-// Get TypeScript errors and their corresponding code lines
+// Get errors from VS Code
 async function updateErrors(view) {
+    if (!view || !view.visible) return;
+
     const diagnostics = vscode.languages.getDiagnostics();
+    const errors = [];
 
-    const errors = await Promise.all(
-        diagnostics.flatMap(([uri, items]) =>
-            items.map(async (item) => {
-                const line = item.range.start.line;
-                let code = "Unable to read this code line.";
+    for (const [uri, items] of diagnostics) {
+        for (const item of items) {
+            if (
+                item.severity !== vscode.DiagnosticSeverity.Error &&
+                item.severity !== vscode.DiagnosticSeverity.Warning
+            ) {
+                continue;
+            }
 
-                try {
-                    const document = await vscode.workspace.openTextDocument(uri);
-                    code = document.lineAt(line).text;
-                } catch (error) {
-                    console.error("Could not read document:", error);
-                }
+            let code = "Unable to read this code line.";
 
-                return {
-                    file: uri.fsPath.split(/[\\/]/).pop(),
-                    line: line + 1,
-                    code,
-                    message: item.message,
-                    explanation: explainError(item.message),
-                    severity:
-                        item.severity === vscode.DiagnosticSeverity.Error
-                            ? "Error"
-                            : "Warning"
-                };
-            })
-        )
-    );
+            try {
+                const document = await vscode.workspace.openTextDocument(uri);
+                code = document.lineAt(item.range.start.line).text;
+            } catch (error) {
+                console.error("Could not read document:", error);
+            }
+
+            errors.push({
+                file: uri.fsPath.split(/[\\/]/).pop(),
+                line: item.range.start.line + 1,
+                code,
+                message: item.message,
+                explanation: explainError(item.message),
+                severity:
+                    item.severity === vscode.DiagnosticSeverity.Error
+                        ? "Error"
+                        : "Warning"
+            });
+        }
+    }
 
     view.webview.postMessage({
         type: "updateErrors",
@@ -64,27 +67,46 @@ async function updateErrors(view) {
 class PrettyErrorsProvider {
     constructor() {
         this.view = null;
+        this.refreshTimer = null;
     }
 
     resolveWebviewView(webviewView) {
-    this.view = webviewView;
+        this.view = webviewView;
 
-    webviewView.webview.options = {
-        enableScripts: true
-    };
+        webviewView.webview.options = {
+            enableScripts: true
+        };
 
-    webviewView.webview.html = this.getHtml();
+        webviewView.webview.html = this.getHtml();
 
-    webviewView.webview.onDidReceiveMessage((message) => {
-        if (message.type === "ready") {
-            updateErrors(webviewView);
+        webviewView.webview.onDidReceiveMessage((message) => {
+            if (message.type === "ready") {
+                updateErrors(webviewView);
+            }
+        });
+
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                updateErrors(webviewView);
+            }
+        });
+
+        webviewView.onDidDispose(() => {
+            this.view = null;
+        });
+    }
+
+    refresh() {
+        if (this.refreshTimer) {
+            clearTimeout(this.refreshTimer);
         }
-    });
 
-    webviewView.onDidDispose(() => {
-        this.view = null;
-    });
-}
+        this.refreshTimer = setTimeout(() => {
+            if (this.view && this.view.visible) {
+                updateErrors(this.view);
+            }
+        }, 300);
+    }
 
     getHtml() {
         return `
@@ -152,9 +174,7 @@ class PrettyErrorsProvider {
                     window.addEventListener("message", (event) => {
                         const data = event.data;
 
-                        if (data.type !== "updateErrors") {
-                            return;
-                        }
+                        if (data.type !== "updateErrors") return;
 
                         const errors = data.errors;
                         const count = document.getElementById("count");
@@ -165,7 +185,7 @@ class PrettyErrorsProvider {
 
                         if (errors.length === 0) {
                             const empty = document.createElement("p");
-                            empty.textContent = "No TypeScript problems found!";
+                            empty.textContent = "No problems found!";
                             container.appendChild(empty);
                             return;
                         }
@@ -177,7 +197,8 @@ class PrettyErrorsProvider {
                             const file = document.createElement("div");
                             file.className = "file";
                             file.textContent =
-                                error.file + " — Line " + error.line;
+                                error.file + " — Line " + error.line +
+                                " (" + error.severity + ")";
 
                             const codeLabel = document.createElement("p");
                             codeLabel.className = "label";
@@ -216,6 +237,8 @@ class PrettyErrorsProvider {
                             container.appendChild(card);
                         });
                     });
+
+                    vscode.postMessage({ type: "ready" });
                 </script>
             </body>
             </html>
@@ -223,9 +246,8 @@ class PrettyErrorsProvider {
     }
 }
 
+// Activate extension
 function activate(context) {
-    console.log("Pretty TypeScript Errors activated!");
-
     const provider = new PrettyErrorsProvider();
 
     const sidebar = vscode.window.registerWebviewViewProvider(
@@ -233,23 +255,26 @@ function activate(context) {
         provider
     );
 
-    const openPanel = vscode.commands.registerCommand(
-        "prettyErrors.openPanel",
-        function () {
-            vscode.commands.executeCommand("prettyErrors.sidebar.focus");
-        }
-    );
+    // Refresh whenever TypeScript diagnostics change
+    const diagnosticListener =
+        vscode.languages.onDidChangeDiagnostics(() => {
+            provider.refresh();
+        });
 
-    const diagnosticListener = vscode.languages.onDidChangeDiagnostics(() => {
-        if (provider.view) {
-            updateErrors(provider.view);
-        }
-    });
+    // Keyboard shortcut command
+   const openPanel = vscode.commands.registerCommand(
+    "prettyErrors.openPanel",
+    async () => {
+        await vscode.commands.executeCommand(
+            "workbench.view.extension.prettyErrors"
+        );
+    }
+);
 
     context.subscriptions.push(
         sidebar,
-        openPanel,
-        diagnosticListener
+        diagnosticListener,
+        openPanel
     );
 }
 
