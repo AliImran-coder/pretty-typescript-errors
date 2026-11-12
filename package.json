@@ -1,0 +1,60 @@
+
+{
+  "name": "pretty-typescript-errors",
+  "displayName": "Pretty TypeScript Errors",
+  "description": "Makes complicated TypeScript errors easier to understand.",
+  "version": "0.0.1",
+  "publisher": "AliImranDev",
+  "icon": "resources/icon.png",
+  "license": "MIT",
+  "repository": {
+  "type": "git",
+  "url": "https://github.com/AliImran-coder/pretty-typescript-errors.git"
+},
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  
+
+"contributes": {
+    "commands": [
+        {
+            "command": "prettyErrors.openPanel",
+            "title": "Pretty TypeScript Errors: Open Panel"
+        }
+    ],
+    "viewsContainers": {
+        "activitybar": [
+            {
+                "id": "prettyErrors",
+                "title": "Pretty Errors",
+                "icon": "resources/icon.svg"
+            }
+        ]
+    },
+    "views": {
+        "prettyErrors": [
+            {
+                "id": "prettyErrors.sidebar",
+                "name": "TypeScript Problems",
+                "type": "webview"
+            }
+        ]
+    }
+},
+
+
+  "scripts": {
+    "check": "node --check src/extension.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0"
+  }
+}
